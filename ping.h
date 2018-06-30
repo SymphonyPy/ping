@@ -39,8 +39,11 @@ char *host;
 int nsent; /* add 1 for each sendto() */
 pid_t pid; /* our PID */
 int sockfd;
+int broadcast = 0;
 int count = 9999;
+int interval = 1;
 int ttl = 0;
+int quiet = 0;
 int verbose;
 int daemon_proc; /* set nonzero by daemon_init() */
 
@@ -52,6 +55,7 @@ void send_v6(void);
 void readloop(void);
 void sig_alrm(int);
 void sig_statistics(int);
+void statistics();
 void tv_sub(struct timeval *, struct timeval *);
 
 double max(double *list);

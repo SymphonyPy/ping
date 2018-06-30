@@ -14,22 +14,33 @@ int main(int argc, char **argv)
 	struct addrinfo *ai;
 
 	opterr = 0; /* don't want getopt() writing to stderr */
-	while ((c = getopt(argc, argv, "bc:hqt:v")) != -1)
+	while ((c = getopt(argc, argv, "bc:fhi:qs:t:v")) != -1)
 	{
 		switch (c)
 		{
 		case 'b':
+			broadcast = 1;
 			break;
 		case 'c':
 			count = atoi(optarg);
 			break;
+		case 'f':
+			interval = 0.2;
+			break;
 		case 'h':
-			printf("Usage: ping [-b] [-c count] [-q] [-t ttl] [-v] destination");
+			printf("Usage: ping [-b] [-c count] [-f] [-i interval] [-q] [-s packetsize] [-t ttl] [-v] destination");
+			break;
+		case 'i':
+			interval = atof(optarg);
+			break;
+		case 'q':
+			quiet = 1;
+			break;
+		case 's':
+			datalen=atoi(optarg);
 			break;
 		case 't':
 			ttl = atoi(optarg);
-			break;
-		case 'q':
 			break;
 		case 'v':
 			verbose++;
@@ -83,6 +94,8 @@ int main(int argc, char **argv)
 
 	readloop();
 
+	statistics();
+
 	exit(0);
 }
 
@@ -114,9 +127,10 @@ void proc_v4(char *ptr, ssize_t len, struct timeval *tvrecv)
 
 		data.rtt[nsent - 1] = rtt;
 
-		printf("%d bytes from %s: seq=%u, ttl=%d, rtt=%.3f ms\n",
-			   icmplen, Sock_ntop_host(pr->sarecv, pr->salen),
-			   icmp->icmp_seq, ip->ip_ttl, rtt);
+		if (quiet == 0)
+			printf("%d bytes from %s: seq=%u, ttl=%d, rtt=%.3f ms\n",
+				   icmplen, Sock_ntop_host(pr->sarecv, pr->salen),
+				   icmp->icmp_seq, ip->ip_ttl, rtt);
 	}
 	else if (verbose)
 	{
@@ -253,6 +267,8 @@ void readloop(void)
 
 	size = 60 * 1024; /* OK if setsockopt fails */
 	setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+	if (broadcast)
+		setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast));
 	if (ttl > 0)
 		setsockopt(sockfd, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
 
@@ -279,16 +295,21 @@ void sig_alrm(int signo)
 {
 	(*pr->fsend)();
 
-	alarm(1);
+	alarm(interval);
 	return; /* probably interrupts recvfrom() */
 }
 
 void sig_statistics(int signo)
 {
+	statistics();
+	exit(1);
+}
+
+void statistics()
+{
 	printf("\n--- %s ping statistics ---", data.addr);
 	printf("\n%d packets transmitted, %d received, %d%% packet loss", nsent, data.received, (nsent - data.received) / nsent * 100);
 	printf("\nrtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", min(data.rtt), avg(data.rtt), max(data.rtt), mdev(data.rtt));
-	exit(1);
 }
 
 double max(double *list)
