@@ -39,12 +39,16 @@ char *host;
 int nsent; /* add 1 for each sendto() */
 pid_t pid; /* our PID */
 int sockfd;
+int ding = 0;
 int broadcast = 0;
 int count = 9999;
+int timestamp = 0;
+int flood = 0;
 int interval = 1;
 int ttl = 0;
 int quiet = 0;
 int verbose;
+struct timeval timeout;
 int daemon_proc; /* set nonzero by daemon_init() */
 
 /* function prototypes */

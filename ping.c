@@ -14,21 +14,27 @@ int main(int argc, char **argv)
 	struct addrinfo *ai;
 
 	opterr = 0; /* don't want getopt() writing to stderr */
-	while ((c = getopt(argc, argv, "bc:fhi:qs:t:v")) != -1)
-	{
+	while ((c = getopt(argc, argv, "abc:Dfhi:qs:t:vW:")) != -1)
+	{	
 		switch (c)
 		{
+		case 'a':
+			ding = 1;
+			break;
 		case 'b':
 			broadcast = 1;
 			break;
 		case 'c':
 			count = atoi(optarg);
 			break;
+		case 'D':
+			timestamp = 1;
+			break;
 		case 'f':
-			interval = 0.2;
+			flood = 1;
 			break;
 		case 'h':
-			printf("Usage: ping [-b] [-c count] [-f] [-i interval] [-q] [-s packetsize] [-t ttl] [-v] destination");
+			printf("Usage: ping [-a] [-b] [-c count] [-D] [-f] [-i interval] [-q] [-s packetsize] [-t ttl] [-v] [-W timeout] destination");
 			break;
 		case 'i':
 			interval = atof(optarg);
@@ -37,13 +43,16 @@ int main(int argc, char **argv)
 			quiet = 1;
 			break;
 		case 's':
-			datalen=atoi(optarg);
+			datalen = atoi(optarg);
 			break;
 		case 't':
 			ttl = atoi(optarg);
 			break;
 		case 'v':
 			verbose++;
+			break;
+		case 'W':
+			timeout.tv_sec = atoi(optarg);
 			break;
 		case '?':
 			err_quit("unrecognized option: %c", c);
@@ -120,6 +129,8 @@ void proc_v4(char *ptr, ssize_t len, struct timeval *tvrecv)
 			return; /* not a response to our ECHO_REQUEST */
 		if (icmplen < 16)
 			err_quit("icmplen (%d) < 16", icmplen);
+		if (timestamp)
+			printf("[%ld.%ld] ", tvrecv->tv_sec, tvrecv->tv_usec);
 
 		tvsend = (struct timeval *)icmp->icmp_data;
 		tv_sub(tvrecv, tvsend);
@@ -271,11 +282,15 @@ void readloop(void)
 		setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast));
 	if (ttl > 0)
 		setsockopt(sockfd, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
-
-	sig_alrm(SIGALRM); /* send first packet */
+	if (!flood)
+		sig_alrm(SIGALRM); /* send first packet */
+	if (timeout.tv_sec)
+		setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
 	for (; count > 0; count--)
 	{
+		if (flood)
+			(*pr->fsend)();
 		len = pr->salen;
 		n = recvfrom(sockfd, recvbuf, sizeof(recvbuf), 0, pr->sarecv, &len);
 		if (n < 0)
@@ -286,6 +301,8 @@ void readloop(void)
 				err_sys("recvfrom error");
 		}
 		data.received++;
+		if (ding)
+			printf("\a");
 		gettimeofday(&tval, NULL);
 		(*pr->fproc)(recvbuf, n, &tval);
 	}
